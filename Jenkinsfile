@@ -38,13 +38,31 @@ pipeline {
 
         stage('Build Environment') {
             steps {
-                echo "Setting up Conda environment"
+                echo "Setting up Conda environment and updating dependencies"
                 sh '''
-                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                # Ensure Conda is up-to-date
+                echo "Updating Conda..."
+                conda update -n base -c defaults conda -y
+
+                # Remove existing environment if present
+                if conda info --envs | grep -q 'jenkins-env'; then
+                    echo "Removing existing environment..."
+                    conda remove --yes -n jenkins-env --all
+                fi
+
+                # Create a clean environment and activate it
+                echo "Creating a new environment..."
                 conda create --yes -n jenkins-env python=3.8
-                source activate jenkins-env
+                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                conda activate jenkins-env
+
+                # Upgrade pip
+                echo "Upgrading pip..."
                 pip install --upgrade pip
-                pip install -r requirements/dev.txt
+
+                # Install dependencies
+                echo "Installing dependencies from requirements..."
+                pip install --upgrade -r requirements/dev.txt
                 '''
             }
         }
@@ -53,7 +71,8 @@ pipeline {
             steps {
                 echo "Collecting raw metrics"
                 sh '''
-                source activate jenkins-env
+                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                conda activate jenkins-env
                 radon raw --json irisvmpy > raw_report.json
                 radon cc --json irisvmpy > cc_report.json
                 radon mi --json irisvmpy > mi_report.json
@@ -61,13 +80,15 @@ pipeline {
                 '''
                 echo "Generating test coverage report"
                 sh '''
-                source activate jenkins-env
+                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                conda activate jenkins-env
                 coverage run irisvmpy/iris.py 1 1 2 3
                 python -m coverage xml -o reports/coverage.xml
                 '''
                 echo "Performing style check"
                 sh '''
-                source activate jenkins-env
+                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                conda activate jenkins-env
                 pylint irisvmpy || true
                 '''
             }
@@ -84,7 +105,8 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 sh '''
-                source activate jenkins-env
+                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                conda activate jenkins-env
                 python -m pytest --verbose --junit-xml reports/unit_tests.xml
                 '''
             }
@@ -98,7 +120,8 @@ pipeline {
         stage('Acceptance Tests') {
             steps {
                 sh '''
-                source activate jenkins-env
+                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                conda activate jenkins-env
                 behave -f=formatters.cucumber_json:PrettyCucumberJSONFormatter -o ./reports/acceptance.json || true
                 '''
             }
@@ -120,7 +143,8 @@ pipeline {
             }
             steps {
                 sh '''
-                source activate jenkins-env
+                source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
+                conda activate jenkins-env
                 python setup.py bdist_wheel
                 '''
             }
