@@ -42,7 +42,7 @@ pipeline {
                 sh '''
                 source /var/lib/jenkins/miniconda3/etc/profile.d/conda.sh
                 conda create --yes -n jenkins-env python=3.8
-                conda activate jenkins-env
+                source activate jenkins-env
                 pip install --upgrade pip
                 pip install -r requirements/dev.txt
                 '''
@@ -53,7 +53,7 @@ pipeline {
             steps {
                 echo "Collecting raw metrics"
                 sh '''
-                source activate ${BUILD_TAG}
+                source activate jenkins-env
                 radon raw --json irisvmpy > raw_report.json
                 radon cc --json irisvmpy > cc_report.json
                 radon mi --json irisvmpy > mi_report.json
@@ -61,29 +61,22 @@ pipeline {
                 '''
                 echo "Generating test coverage report"
                 sh '''
-                source activate ${BUILD_TAG}
+                source activate jenkins-env
                 coverage run irisvmpy/iris.py 1 1 2 3
                 python -m coverage xml -o reports/coverage.xml
                 '''
                 echo "Performing style check"
                 sh '''
-                source activate ${BUILD_TAG}
+                source activate jenkins-env
                 pylint irisvmpy || true
                 '''
             }
             post {
                 always {
                     step([$class: 'CoberturaPublisher',
-                        autoUpdateHealth: false,
-                        autoUpdateStability: false,
                         coberturaReportFile: 'reports/coverage.xml',
-                        failNoReports: false,
-                        failUnhealthy: false,
-                        failUnstable: false,
-                        maxNumberOfBuilds: 10,
-                        onlyStable: false,
-                        sourceEncoding: 'ASCII',
-                        zoomCoverageChart: false])
+                        failNoReports: false
+                    ])
                 }
             }
         }
@@ -91,7 +84,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 sh '''
-                source activate ${BUILD_TAG}
+                source activate jenkins-env
                 python -m pytest --verbose --junit-xml reports/unit_tests.xml
                 '''
             }
@@ -105,7 +98,7 @@ pipeline {
         stage('Acceptance Tests') {
             steps {
                 sh '''
-                source activate ${BUILD_TAG}
+                source activate jenkins-env
                 behave -f=formatters.cucumber_json:PrettyCucumberJSONFormatter -o ./reports/acceptance.json || true
                 '''
             }
@@ -115,7 +108,6 @@ pipeline {
                         buildStatus: 'SUCCESS',
                         fileIncludePattern: '**/*.json',
                         jsonReportDirectory: './reports/',
-                        parallelTesting: true,
                         sortingMethod: 'ALPHABETICAL'
                     )
                 }
@@ -124,33 +116,30 @@ pipeline {
 
         stage('Build Package') {
             when {
-                expression {
-                    currentBuild.result == null || currentBuild.result == 'SUCCESS'
-                }
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
                 sh '''
-                source activate ${BUILD_TAG}
+                source activate jenkins-env
                 python setup.py bdist_wheel
                 '''
             }
             post {
                 always {
                     archiveArtifacts(
-                        allowEmptyArchive: true,
-                        artifacts: 'dist/*whl',
+                        artifacts: 'dist/*.whl',
                         fingerprint: true
                     )
                 }
             }
         }
 
-        // Uncomment and customize for deployment to PyPI
+        // Uncomment for deployment to PyPI
         // stage("Deploy to PyPI") {
         //     steps {
-        //         sh """
+        //         sh '''
         //         twine upload dist/*
-        //         """
+        //         '''
         //     }
         // }
     }
@@ -158,15 +147,15 @@ pipeline {
     post {
         always {
             sh '''
-            conda remove --yes -n ${BUILD_TAG} --all || true
+            conda remove --yes -n jenkins-env --all || true
             '''
         }
         failure {
             emailext(
                 subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
                 body: """
-                <p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
-                <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>
+                <p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'</p>
+                <p>Check console output at: <a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a></p>
                 """,
                 recipientProviders: [[$class: 'DevelopersRecipientProvider']]
             )
