@@ -3,7 +3,7 @@ pipeline {
 
     // Trigger the pipeline based on SCM polling (every 5 minutes, Monday to Friday)
     triggers {
-        pollSCM('*/5 * * * 1-5')
+        pollSCM('*/5 * * * 1-7')
     }
 
     options {
