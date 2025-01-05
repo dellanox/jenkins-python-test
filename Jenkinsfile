@@ -26,8 +26,13 @@ pipeline {
             steps {
                 echo "Creating virtual environment"
                 sh '''
+                    # Initialize Conda environment for the current shell
+                    source /var/lib/jenkins/miniconda3/bin/activate && conda init bash
+                    # Create a unique environment for this build
                     conda create --yes -n ${BUILD_TAG} python || exit 1
-                    conda activate ${BUILD_TAG} || exit 1
+                    # Activate the newly created environment
+                    source /var/lib/jenkins/miniconda3/bin/activate && conda activate ${BUILD_TAG} || exit 1
+                    # Install dependencies
                     pip install -r requirements/dev.txt || exit 1
                 '''
             }
@@ -37,7 +42,7 @@ pipeline {
             steps {
                 echo "Running static code analysis"
                 sh '''
-                    conda activate ${BUILD_TAG} || exit 1
+                    source /var/lib/jenkins/miniconda3/bin/activate && conda activate ${BUILD_TAG} || exit 1
                     radon raw --json irisvmpy > reports/raw_report.json || exit 1
                     radon cc --json irisvmpy > reports/cc_report.json || exit 1
                     radon mi --json irisvmpy > reports/mi_report.json || exit 1
@@ -58,7 +63,7 @@ pipeline {
             steps {
                 echo "Running unit tests"
                 sh '''
-                    conda activate ${BUILD_TAG} || exit 1
+                    source /var/lib/jenkins/miniconda3/bin/activate && conda activate ${BUILD_TAG} || exit 1
                     python -m pytest --verbose --junit-xml reports/unit_tests.xml || exit 1
                 '''
             }
@@ -73,7 +78,7 @@ pipeline {
             steps {
                 echo "Running acceptance tests"
                 sh '''
-                    conda activate ${BUILD_TAG} || exit 1
+                    source /var/lib/jenkins/miniconda3/bin/activate && conda activate ${BUILD_TAG} || exit 1
                     behave -f formatters.cucumber_json:PrettyCucumberJSONFormatter -o ./reports/acceptance.json || true
                 '''
             }
@@ -97,7 +102,7 @@ pipeline {
             steps {
                 echo "Building package"
                 sh '''
-                    conda activate ${BUILD_TAG} || exit 1
+                    source /var/lib/jenkins/miniconda3/bin/activate && conda activate ${BUILD_TAG} || exit 1
                     python setup.py bdist_wheel || exit 1
                 '''
             }
@@ -112,7 +117,10 @@ pipeline {
     post {
         always {
             echo "Cleaning up environment"
-            sh 'conda remove --yes -n ${BUILD_TAG} --all || true'
+            sh '''
+                source /var/lib/jenkins/miniconda3/bin/activate
+                conda remove --yes -n ${BUILD_TAG} --all || true
+            '''
         }
         failure {
             emailext (
