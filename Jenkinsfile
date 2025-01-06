@@ -13,7 +13,7 @@ pipeline {
 
     environment {
         PATH = "/var/lib/jenkins/miniconda3/bin:$PATH" // Includes Miniconda binaries in PATH.
-        PYTHON_VERSION = "3.8" // Target Python version for all operations.
+        PYTHON_VERSION = "3.11" // Target Python version for all operations.
         VENV_DIR = "venv" // Directory for the virtual environment.
     }
 
