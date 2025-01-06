@@ -16,6 +16,26 @@ pipeline {
     }
 
     stages {
+        stage("Initialize Build Environment") {
+            steps {
+                echo "Initializing global build environment"
+                sh '''
+                    #!/bin/bash
+                    export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
+
+                    # Remove any pre-existing environment for cleanup
+                    conda env remove --yes -n build_env || true
+
+                    # Create a global build environment
+                    conda create --yes -n build_env python=3.8
+
+                    # Activate the global environment and install base dependencies
+                    . /var/lib/jenkins/miniconda3/bin/activate build_env
+                    pip install -r requirements/dev.txt
+                '''
+            }
+        }
+
         stage("Checkout Code") {
             steps {
                 echo "Checking out source code" // Logs the current operation for visibility.
@@ -25,23 +45,19 @@ pipeline {
        
         stage("Set Up Environment") {
             steps {
-                echo "Setting up virtual environment"
+                echo "Setting up stage-specific virtual environment"
                 sh '''
                     #!/bin/bash
-                    # Ensure Miniconda path is set
                     export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
 
-                    # Remove the environment if it exists (clean-up step)
+                    # Remove the stage-specific environment if it exists
                     conda env remove --yes -n ${BUILD_TAG} || true
 
-                    # Create a new Conda virtual environment
-                    conda create --yes -n ${BUILD_TAG} python=3.12
+                    # Clone the global environment to stage-specific
+                    conda create --yes --name ${BUILD_TAG} --clone build_env
 
-                    # Activate the environment for the current shell session
+                    # Activate the stage-specific environment
                     . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
-
-                    # Install required dependencies
-                    pip install -r requirements/dev.txt || exit 1
                 '''
             }
         }
@@ -123,10 +139,11 @@ pipeline {
 
     post {
         always {
-            echo "Cleaning up environment"
+            echo "Cleaning up environments"
             sh '''
                 #!/bin/bash
                 . /var/lib/jenkins/miniconda3/bin/activate
+                conda remove --yes -n build_env --all || true
                 conda remove --yes -n ${BUILD_TAG} --all || true
             '''
         }
