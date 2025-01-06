@@ -7,32 +7,34 @@ pipeline {
 
     options {
         skipDefaultCheckout(true) // Prevents default repository checkout.
-        buildDiscarder(logRotator(numToKeepStr: '10')) // Keeps last 10 builds.
+        buildDiscarder(logRotator(numToKeepStr: '10')) // Keeps the last 10 builds.
         timestamps() // Adds timestamps to console logs.
-        ansiColor('xterm') // Enables colored console output for better readability.
     }
 
     environment {
         PATH = "/var/lib/jenkins/miniconda3/bin:$PATH" // Includes Miniconda binaries in PATH.
+        PYTHON_VERSION = "3.8" // Target Python version for all operations.
     }
 
     stages {
         stage("Initialize Global Environment") {
             steps {
-                echo "Initializing global build environment"
-                sh '''
-                    #!/bin/bash
-                    export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
+                echo "Initializing global build environment with Python ${env.PYTHON_VERSION}"
+                wrap([$class: 'AnsiColorBuildWrapper', colorMapName: 'xterm']) {
+                    sh '''
+                        #!/bin/bash
+                        export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
 
-                    # Clean up existing global environment
-                    conda env remove --yes -n build_env || true
+                        # Clean up existing global environment
+                        conda env remove --yes -n build_env || true
 
-                    # Create and configure global build environment
-                    conda create --yes -n build_env python=3.12
-                    . /var/lib/jenkins/miniconda3/bin/activate build_env
-                    pip install --upgrade pip
-                    pip install --requirement requirements/dev.txt --only-binary=:all:
-                '''
+                        # Create and configure global build environment with Python 3.8
+                        conda create --yes -n build_env python=$PYTHON_VERSION
+                        . /var/lib/jenkins/miniconda3/bin/activate build_env
+                        pip install --upgrade pip
+                        pip install --requirement requirements/dev.txt --only-binary=:all:
+                    '''
+                }
             }
         }
 
@@ -45,45 +47,51 @@ pipeline {
 
         stage("Set Up Stage-Specific Environment") {
             steps {
-                echo "Setting up stage-specific environment"
-                sh '''
-                    #!/bin/bash
-                    export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
+                echo "Setting up stage-specific environment with Python ${env.PYTHON_VERSION}"
+                wrap([$class: 'AnsiColorBuildWrapper', colorMapName: 'xterm']) {
+                    sh '''
+                        #!/bin/bash
+                        export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
 
-                    # Remove existing stage-specific environment if present
-                    conda env remove --yes -n ${BUILD_TAG} || true
+                        # Remove existing stage-specific environment if present
+                        conda env remove --yes -n ${BUILD_TAG} || true
 
-                    # Clone the global environment to stage-specific
-                    conda create --yes --name ${BUILD_TAG} --clone build_env
-                    . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
-                '''
+                        # Clone the global environment to stage-specific
+                        conda create --yes --name ${BUILD_TAG} --clone build_env
+                        . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
+                    '''
+                }
             }
         }
 
         stage("Static Code Analysis") {
             steps {
                 echo "Running static code analysis"
-                sh '''
-                    #!/bin/bash
-                    . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
-                    mkdir -p reports
-                    radon raw --json irisvmpy > reports/raw_report.json
-                    radon cc --json irisvmpy > reports/cc_report.json
-                    radon mi --json irisvmpy > reports/mi_report.json
-                    sloccount --duplicates --wide irisvmpy > reports/sloccount.sc
-                '''
+                wrap([$class: 'AnsiColorBuildWrapper', colorMapName: 'xterm']) {
+                    sh '''
+                        #!/bin/bash
+                        . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
+                        mkdir -p reports
+                        radon raw --json irisvmpy > reports/raw_report.json
+                        radon cc --json irisvmpy > reports/cc_report.json
+                        radon mi --json irisvmpy > reports/mi_report.json
+                        sloccount --duplicates --wide irisvmpy > reports/sloccount.sc
+                    '''
+                }
             }
         }
 
         stage("Unit Tests") {
             steps {
                 echo "Running unit tests"
-                sh '''
-                    #!/bin/bash
-                    . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
-                    mkdir -p reports
-                    python -m pytest --verbose --junit-xml reports/unit_tests.xml
-                '''
+                wrap([$class: 'AnsiColorBuildWrapper', colorMapName: 'xterm']) {
+                    sh '''
+                        #!/bin/bash
+                        . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
+                        mkdir -p reports
+                        python -m pytest --verbose --junit-xml reports/unit_tests.xml
+                    '''
+                }
             }
             post {
                 always {
@@ -95,12 +103,14 @@ pipeline {
         stage("Acceptance Tests") {
             steps {
                 echo "Running acceptance tests"
-                sh '''
-                    #!/bin/bash
-                    . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
-                    mkdir -p reports
-                    behave -f formatters.cucumber_json:PrettyCucumberJSONFormatter -o ./reports/acceptance.json || true
-                '''
+                wrap([$class: 'AnsiColorBuildWrapper', colorMapName: 'xterm']) {
+                    sh '''
+                        #!/bin/bash
+                        . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
+                        mkdir -p reports
+                        behave -f formatters.cucumber_json:PrettyCucumberJSONFormatter -o ./reports/acceptance.json || true
+                    '''
+                }
             }
             post {
                 always {
@@ -120,12 +130,14 @@ pipeline {
                 }
             }
             steps {
-                echo "Building package"
-                sh '''
-                    #!/bin/bash
-                    . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
-                    python setup.py bdist_wheel
-                '''
+                echo "Building package with Python ${env.PYTHON_VERSION}"
+                wrap([$class: 'AnsiColorBuildWrapper', colorMapName: 'xterm']) {
+                    sh '''
+                        #!/bin/bash
+                        . /var/lib/jenkins/miniconda3/bin/activate ${BUILD_TAG}
+                        python setup.py bdist_wheel
+                    '''
+                }
             }
             post {
                 always {
@@ -138,24 +150,27 @@ pipeline {
     post {
         always {
             echo "Cleaning up environments"
-            sh '''
-                #!/bin/bash
-                export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
+            wrap([$class: 'AnsiColorBuildWrapper', colorMapName: 'xterm']) {
+                sh '''
+                    #!/bin/bash
+                    export PATH=/var/lib/jenkins/miniconda3/bin:$PATH
 
-                # Cleanup environments
-                conda remove --yes -n build_env --all || true
-                conda remove --yes -n ${BUILD_TAG} --all || true
-            '''
+                    # Cleanup environments
+                    conda remove --yes -n build_env --all || true
+                    conda remove --yes -n ${BUILD_TAG} --all || true
+                '''
+            }
         }
         failure {
             emailext (
                 subject: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
                 body: """<p>FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'</p>
-                         <p>Check console output at <a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a></p>""",
+                         <p>Check console output at <a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a></p>
+                         <p>Snippet of Logs:</p>
+                         <pre>${BUILD_LOG, maxLines=50}</pre>""",
                 recipientProviders: [[$class: 'DevelopersRecipientProvider']]
             )
         }
     }
 }
-
 
