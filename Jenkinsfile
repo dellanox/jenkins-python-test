@@ -22,19 +22,7 @@ pipeline {
                 checkout scm // Checks out the code from the source control repository configured in the job.
             }
         }
-
-        #stage("Set Up Environment") {
-            #steps {
-                #echo "Setting up virtual environment" // Logs the start of the environment setup.
-                #sh '''
-                    #. /var/lib/jenkins/miniconda3/bin/activate && conda init bash // Activates Miniconda and initializes bash for conda.
-                    #conda create --yes -n ${BUILD_TAG} python=3.12 || exit 1 // Creates a new Conda environment with the specified Python version.
-                    #. /var/lib/jenkins/miniconda3/bin/activate && conda activate ${BUILD_TAG} || exit 1 // Activates the newly created environment.
-                    #pip install -r requirements/dev.txt || exit 1 // Installs dependencies from the dev requirements file.
-                #'''
-            #}
-        #}
-        
+       
         stage("Set Up Environment") {
 	    steps {
 		echo "Setting up virtual environment"
@@ -56,7 +44,6 @@ pipeline {
 		'''
 	    }
 	}	
-
 
         stage("Static Code Analysis") {
             steps {
