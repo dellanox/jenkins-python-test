@@ -37,7 +37,7 @@ pipeline {
 
                     # Create and activate a new virtual environment
                     python${PYTHON_VERSION} -m venv ${VENV_DIR}
-                    source ${VENV_DIR}/bin/activate
+                    . ${VENV_DIR}/bin/activate
 
                     # Upgrade pip and install dependencies
                     pip install --upgrade pip
@@ -51,7 +51,7 @@ pipeline {
                 echo "Running static code analysis"
                 sh '''
                     #!/bin/bash
-                    source ${VENV_DIR}/bin/activate
+                    . ${VENV_DIR}/bin/activate
                     mkdir -p reports
                     radon raw --json irisvmpy > reports/raw_report.json
                     radon cc --json irisvmpy > reports/cc_report.json
@@ -66,7 +66,7 @@ pipeline {
                 echo "Running unit tests"
                 sh '''
                     #!/bin/bash
-                    source ${VENV_DIR}/bin/activate
+                    . ${VENV_DIR}/bin/activate
                     mkdir -p reports
                     python -m pytest --verbose --junit-xml reports/unit_tests.xml
                 '''
@@ -83,7 +83,7 @@ pipeline {
                 echo "Running acceptance tests"
                 sh '''
                     #!/bin/bash
-                    source ${VENV_DIR}/bin/activate
+                    . ${VENV_DIR}/bin/activate
                     mkdir -p reports
                     behave -f formatters.cucumber_json:PrettyCucumberJSONFormatter -o ./reports/acceptance.json || true
                 '''
@@ -109,7 +109,7 @@ pipeline {
                 echo "Building package with Python ${env.PYTHON_VERSION}"
                 sh '''
                     #!/bin/bash
-                    source ${VENV_DIR}/bin/activate
+                    . ${VENV_DIR}/bin/activate
                     python setup.py bdist_wheel
                 '''
             }
